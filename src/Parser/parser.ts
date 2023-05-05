@@ -23,7 +23,7 @@ const ASSIGNER : string = 'assigner'
 const SEMICOLON : string = 'semicolon'
 const TRUE : string = 'true'
 
-class Parser {
+export class Parser {
   lexer: Lexer // Instance of the lexer we created above
 
   token: Token // Current token under examination
