@@ -15,15 +15,15 @@ import {
   CallExpression
 } from "../Parser/ast"
 import { Environment } from "./env"
-import { Value } from "./value"
+import { Value, booleanValue, fnValue, integerValue, nullValue, returnValue } from "./value"
 
 const evalProgram = ({ body }: Program, environment: Environment): Value => {
-  let result: Value
+  let result: Value = nullValue()
 
   for (const statement of body) {
     result = evaluate(statement, environment)
 
-    if (result.kind === 'returnValue') { return result.value }
+    if (result.kind === 'returnValue') { return result.value as Value }
     if (result.kind === 'error') { return result }
   }
 
@@ -33,7 +33,7 @@ const evalProgram = ({ body }: Program, environment: Environment): Value => {
 const evalExpressionStatement = ({ expr }: ExpressionStatement, environment: Environment): Value => evaluate(expr, environment)
 
 const evalBlockStatement = ({ statements } : BlockStatement, environment: Environment): Value => {
-  let result: Value
+  let result: Value = nullValue()
 
   for (const statement of statements) {
     result = evaluate(statement, environment)
@@ -64,7 +64,7 @@ const evalReturnStatement = ({ expr } : ReturnStatement, environment: Environmen
 
 const evalIntegerLiteral = ({ value } : IntegerLiteral, environment: Environment): Value => integerValue(value)
 const evalBooleanLiteral = ({ value } : BooleanLiteral, environment: Environment): Value => booleanValue(value)
-const evalFunctionLiteral = ({ parameters, body} : FunctionLiteral, environment: Environment): Value => fnValue(parameters, body, environment)
+const evalFunctionLiteral = ({ parameters, body } : FunctionLiteral, environment: Environment): Value => fnValue(parameters, body as BlockStatement, environment)
 const evalIdentifier = (node : Identifier, environment: Environment): Value => evaluateIdentifier(node, environment)
 
 const evalUnaryExpression = ({ operator, expr } : UnaryExpression, environment: Environment): Value => {

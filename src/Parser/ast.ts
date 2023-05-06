@@ -30,7 +30,7 @@ export const returnStatement = (expr: Expression) => ({ kind: 'returnStatement',
 export const expressionStatement = (expr: Expression) => ({ kind: "expressionStatement", expr })
 export const blockStatement = ( statements: Statement[] ) => ({ kind: "blockStatement", statements })
 
-export const unaryExpression = ( operator: string, expr: Expression) => ({  kind: 'unaryExpression', operator, expr })
+export const unaryExpression = (operator: string, expr: Expression) => ({  kind: 'unaryExpression', operator, expr })
 export const binaryExpression = (operator: string, left: Expression, right: Expression) => ({ kind: 'binaryExpression', operator, left, right })
 
 export const integerLiteral = (value: number) => ({ kind: 'integerLiteral', value })

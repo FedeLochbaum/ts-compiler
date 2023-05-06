@@ -13,6 +13,9 @@ import {
   integerLiteral,
   booleanLiteral,
   expressionStatement,
+  UnaryExpression,
+  BinaryExpression,
+  Identifier,
 } from './ast'
 
 const EOF : string = 'eof'
@@ -23,31 +26,48 @@ const ASSIGNER : string = 'assigner'
 const SEMICOLON : string = 'semicolon'
 const TRUE : string = 'true'
 
+type MaybeExpr = Expression | undefined
+type PrefixParseFn = () => MaybeExpr
+type InfixParseFn = (_: Expression) => MaybeExpr
+
 export class Parser {
   lexer: Lexer // Instance of the lexer we created above
-
   token: Token // Current token under examination
-  
   peekToken: Token // Next token to be examined
-
   errors : Array<string>
-
-  prefixParseFunctions = new Map([
-    ['minus', this.parseUnaryExpression.bind(this)],
-    ['integer', this.parseIntegerLiteral.bind(this)],
-    // and many others
-  ])
-
-  infixParseFunctions = new Map([
-    ['minus', this.parseBinaryExpression.bind(this)],
-    ['multiply', this.parseBinaryExpression.bind(this)],
-  ])
+  infixParseFunctions: { [key: string]: InfixParseFn }
+  prefixParseFunctions: { [key: string]: PrefixParseFn }
 
   constructor(lexer: Lexer) {
     this.lexer = lexer
     this.token = lexer.getToken()
     this.peekToken = lexer.getToken()
     this.errors = []
+    this.infixParseFunctions = {
+      plus: this.parseBinaryExpression,
+      minus: this.parseBinaryExpression,
+      divide: this.parseBinaryExpression,
+      multiply: this.parseBinaryExpression,
+      equal: this.parseBinaryExpression,
+      notEqual: this.parseBinaryExpression,
+      lessThan: this.parseBinaryExpression,
+      greaterThan: this.parseBinaryExpression,
+      // leftParen: this.parseCallExpression,
+    }
+
+    this.prefixParseFunctions = {
+      integer: this.parseIntegerLiteral,
+      true: this.parseBooleanLiteral,
+      false: this.parseBooleanLiteral,
+      // function: this.parseFunctionLiteral,
+      // identifier: this.parseIdentifier,
+      minus: this.parseUnaryExpression,
+      bang: this.parseUnaryExpression,
+      // leftParen: this.parseGroupedExpression,
+      // if: this.parseIfExpression,
+    }
+
+
   }
 
   parse() {
@@ -64,15 +84,15 @@ export class Parser {
     return program(statements)
   }
 
-  parseStatement() {
+  parseStatement = () : any => {
     if (![LET, RETURN].includes(this.token.kind)) return this.parseExpressionStatement()
     return this.tokenIs(LET) ? this.parseLetStatement() : this.parseReturnStatement()
   }
 
-  parseLetStatement() {
+  parseLetStatement = () => {
     if (!this.peekTokenIs(IDENTIFIER)) return
 
-    const name = identifier(this.token.text)
+    const name = identifier(this.token.text) as Identifier
 
     if (!this.peekTokenIs(ASSIGNER)) return
 
@@ -87,8 +107,8 @@ export class Parser {
     return letStatement(name, expression)
   }
 
-  parseReturnStatement() {
-    this.nextToken();
+  parseReturnStatement = () => {
+    this.nextToken()
 
     const expression = this.parseExpression(Precedence.Lowest)
 
@@ -99,7 +119,7 @@ export class Parser {
     return returnStatement(expression)
   }
 
-  parseExpressionStatement() {
+  parseExpressionStatement = () => {
     const expression = this.parseExpression(Precedence.Lowest)
 
     if (!expression) return undefined
@@ -111,7 +131,7 @@ export class Parser {
     return expressionStatement(expression)
   }
 
-  parseUnaryExpression() {
+  parseUnaryExpression = () : MaybeExpr => {
     const operator = this.token.text
 
     this.nextToken()
@@ -120,10 +140,10 @@ export class Parser {
 
     if (!expr) return
 
-    return unaryExpression(operator, expr)
+    return unaryExpression(operator, expr) as UnaryExpression
   }
 
-  parseBinaryExpression(left: Expression) {
+  parseBinaryExpression = (left: Expression) : MaybeExpr => {
     const operator = this.token.text
 
     const precedence = this.currentPrecedence()
@@ -134,12 +154,12 @@ export class Parser {
 
     if (!right) return
 
-    return binaryExpression(operator, left, right)
+    return binaryExpression(operator, left, right) as BinaryExpression
   }
 
-  parseExpression(precedence: Precedence) {
+  parseExpression = (precedence: Precedence) => {
     // Find the prefix parsing function for the current token kind.
-    const prefixParseFn = this.prefixParseFunctions.get(this.token.kind)
+    const prefixParseFn = this.prefixParseFunctions[this.token.kind as keyof typeof this.prefixParseFunctions]
     if (!prefixParseFn) { this.errors.push(`No unary parse function for ${this.token.kind}`); return }
 
     // Call the prefix parsing function to build the expression node.
@@ -153,7 +173,7 @@ export class Parser {
 
       if (!peekKind) throw new Error('peekKind cannot be null.')
 
-      const infixParseFn = this.infixParseFunctions.get(peekKind)
+      const infixParseFn = this.infixParseFunctions[peekKind]
       if (!infixParseFn) return leftExpression
 
       this.nextToken()
@@ -165,15 +185,15 @@ export class Parser {
     return leftExpression
   }
 
-  parseIntegerLiteral() {
+  parseIntegerLiteral = () : MaybeExpr => {
     const value = Number(this.token.text)
 
     if (Number.isNaN(value)) { this.errors.push(`could not parse ${this.token.text} as integer`); return undefined }
 
-    return integerLiteral(value)
+    return integerLiteral(value) as MaybeExpr
   }
 
-  parseBooleanLiteral = () => booleanLiteral(this.token.kind === TRUE)
+  parseBooleanLiteral = () : MaybeExpr => booleanLiteral(this.token.kind === TRUE) as MaybeExpr
 
   currentPrecedence = () => precedenceMap.get(this.token.kind) ?? Precedence.Lowest
   peekPrecedence = () => (this.peekToken && precedenceMap.get(this.peekToken.kind)) ?? Precedence.Lowest
@@ -181,7 +201,7 @@ export class Parser {
   tokenIs = (kind : string) : boolean => this.token.kind === kind
   peekTokenIs = (kind : string) : boolean => this.peekToken.kind === kind
 
-  nextToken() {
+  nextToken = () => {
     if (!this.peekToken) throw new Error('No more tokens')
 
     this.token = this.peekToken
