@@ -23,15 +23,19 @@ export interface IfExpression { kind: 'ifExpression', condition: Expression, con
 
 // builders
 export const program = (body : Statement[]) => ({ kind: 'program', body })
-export const identifier = (value: string) => ({ kind: 'identifier', value })
+export const identifier = (value: string) : Expression => ({ kind: 'identifier', value })
 
 export const letStatement = (name: Identifier, expr: Expression) => ({ kind: 'let', name, expr })
 export const returnStatement = (expr: Expression) => ({ kind: 'returnStatement', expr })
 export const expressionStatement = (expr: Expression) => ({ kind: "expressionStatement", expr })
-export const blockStatement = ( statements: Statement[] ) => ({ kind: "blockStatement", statements })
+export const blockStatement = ( statements: Statement[] ) : Statement => ({ kind: "blockStatement", statements })
 
 export const unaryExpression = (operator: string, expr: Expression) => ({  kind: 'unaryExpression', operator, expr })
 export const binaryExpression = (operator: string, left: Expression, right: Expression) => ({ kind: 'binaryExpression', operator, left, right })
 
 export const integerLiteral = (value: number) => ({ kind: 'integerLiteral', value })
 export const booleanLiteral = (value: boolean) => ({ kind: 'booleanLiteral', value })
+
+export const callExpression = (func: Identifier | FunctionLiteral, args: Expression[]) : Expression => ({ kind: 'callExpression', func, args })
+export const functionLiteral = (parameters: Identifier[], body: Statement) : Expression => ({ kind: 'functionLiteral', parameters, body })
+export const ifExpression = (condition: Expression, consequence: Statement, alternative?: Statement) : Expression => ({ kind: 'ifExpression', condition, consequence, alternative })

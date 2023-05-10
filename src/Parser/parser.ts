@@ -2,8 +2,14 @@ import { Token, TokenKind } from '../Lexer/token'
 import Lexer from '../Lexer/lexer'
 import { Precedence, precedenceMap } from './precedence'
 import {
+  // Types
+  UnaryExpression,
+  BinaryExpression,
+  Identifier,
   Statement,
   Expression,
+
+  // Builders
   program,
   identifier,
   letStatement,
@@ -13,9 +19,10 @@ import {
   integerLiteral,
   booleanLiteral,
   expressionStatement,
-  UnaryExpression,
-  BinaryExpression,
-  Identifier,
+  callExpression,
+  functionLiteral,
+  ifExpression,
+  blockStatement,
 } from './ast'
 
 const EOF : string = 'eof'
@@ -52,22 +59,20 @@ export class Parser {
       notEqual: this.parseBinaryExpression,
       lessThan: this.parseBinaryExpression,
       greaterThan: this.parseBinaryExpression,
-      // leftParen: this.parseCallExpression,
+      leftParen: this.parseCallExpression,
     }
 
     this.prefixParseFunctions = {
       integer: this.parseIntegerLiteral,
       true: this.parseBooleanLiteral,
       false: this.parseBooleanLiteral,
-      // function: this.parseFunctionLiteral,
-      // identifier: this.parseIdentifier,
+      function: this.parseFunctionLiteral,
+      identifier: this.parseIdentifier,
       minus: this.parseUnaryExpression,
       bang: this.parseUnaryExpression,
-      // leftParen: this.parseGroupedExpression,
-      // if: this.parseIfExpression,
+      leftParen: this.parseGroupedExpression,
+      if: this.parseIfExpression,
     }
-
-
   }
 
   parse() {
@@ -157,6 +162,73 @@ export class Parser {
     return binaryExpression(operator, left, right) as BinaryExpression
   }
 
+  parseGroupedExpression = () : MaybeExpr => {
+
+    this.nextToken()
+
+    const expression = this.parseExpression(Precedence.Lowest)
+
+    if (!this.expectPeek('rightParen')) return
+
+    return expression
+  }
+
+  parseIfExpression = () : MaybeExpr => {
+
+    if (!this.expectPeek('leftParen')) return
+
+    this.nextToken()
+
+    const condition = this.parseExpression(Precedence.Lowest)
+
+    if (!condition || !this.expectPeek('rightParen') || !this.expectPeek('leftBrace')) return
+
+    const consequence = this.parseBlockStatement()
+
+    if (!this.peekTokenIs('else')) { return ifExpression(condition, consequence) }
+
+    this.nextToken()
+
+    if (!this.expectPeek('leftBrace')) return
+
+    const alternative = this.parseBlockStatement()
+
+    return ifExpression(condition, consequence, alternative)
+  }
+
+  parseCallExpression = (left: Expression) : MaybeExpr => {
+    const args = this.parseCallArugments()
+
+    if (left.kind === "identifier" || left.kind == "functionLiteral") {
+      if (!args) return
+
+      return callExpression(left, args)
+    }
+  }
+
+  parseCallArugments = () : Expression[] | undefined => {
+    const args : Expression[] = []
+
+    if (this.peekTokenIs('rightParen')) { this.nextToken(); return args }
+
+    this.nextToken()
+
+    const arg = this.parseExpression(Precedence.Lowest)
+
+    if (!arg) return
+    args.push(arg)
+
+    while (this.peekTokenIs('comma')) {
+      this.nextToken(); this.nextToken()
+      const arg = this.parseExpression(Precedence.Lowest)
+      if (arg) args.push(arg)
+    }
+
+    if (!this.peekTokenIs('rightParen')) return
+
+    return args
+  }
+
   parseExpression = (precedence: Precedence) => {
     // Find the prefix parsing function for the current token kind.
     const prefixParseFn = this.prefixParseFunctions[this.token.kind as keyof typeof this.prefixParseFunctions]
@@ -193,10 +265,74 @@ export class Parser {
     return integerLiteral(value) as MaybeExpr
   }
 
+  parseIdentifier = () : MaybeExpr => identifier(this.token.text)
+
+  parseFunctionLiteral = () : MaybeExpr => {
+    if (!this.peekTokenIs('leftParen')) return
+
+    const parameters = this.parseFunctionParameters()
+
+    if (!parameters) return
+
+    if (!this.peekTokenIs('leftBrace')) return;
+
+    const body = this.parseBlockStatement()
+
+    return functionLiteral(parameters as Identifier[], body)
+  }
+
+  parseBlockStatement = () : Statement => {
+    const statements : Statement[] = []
+
+    this.nextToken()
+
+    while (!this.tokenIs('rightBrace') && !this.tokenIs('eof')) {
+      const statement = this.parseStatement()
+
+      if (statement) statements.push(statement)
+
+      this.nextToken()
+    }
+
+    return blockStatement(statements)
+  }
+
+  parseFunctionParameters = () => {
+    const identifiers: Expression[] = []
+
+    if (this.peekTokenIs('rightParen')) { this.nextToken(); return identifiers }
+
+    this.nextToken()
+
+    identifiers.push(identifier(this.token.text))
+
+    while (this.peekTokenIs('comma')) {
+      this.nextToken(); this.nextToken()
+      identifiers.push(identifier(this.token.text))
+    }
+
+    if (!this.expectPeek('rightParen')) return
+
+    return identifiers
+  }
+
   parseBooleanLiteral = () : MaybeExpr => booleanLiteral(this.token.kind === TRUE) as MaybeExpr
 
   currentPrecedence = () => precedenceMap.get(this.token.kind) ?? Precedence.Lowest
   peekPrecedence = () => (this.peekToken && precedenceMap.get(this.peekToken.kind)) ?? Precedence.Lowest
+
+  expectPeek = (kind: Token["kind"]) => {
+    if (this.peekTokenIs(kind)) { this.nextToken(); return true }
+
+    this.peekError(kind)
+    return false
+  }
+
+  peekError = (type: TokenKind) => {
+    this.errors.push(
+      `expected next token to be ${type}, got ${this.peekToken?.kind} instead`
+    );
+  }
 
   tokenIs = (kind : string) : boolean => this.token.kind === kind
   peekTokenIs = (kind : string) : boolean => this.peekToken.kind === kind
